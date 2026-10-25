@@ -1,0 +1,6 @@
+# Agent scratch space. It is mounted separately in the container and must
+# never be committed: it can contain downloaded logs, binaries and tokens.
+agents/scratch/
+
+# Local harness state, if this project is ever checked out standalone.
+/dsh

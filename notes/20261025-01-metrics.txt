@@ -1,0 +1,235 @@
+#
+# <meta:header>
+#   <meta:licence>
+#     Copyright (c) 2026, University of Manchester (http://www.manchester.ac.uk/)
+#
+#     This information is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+#
+#     This information is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+#
+#     You should have received a copy of the GNU General Public License
+#     along with this software. If not, see <http://www.gnu.org/licenses/>.
+#   </meta:licence>
+# </meta:header>
+#
+#zrq-notes-indent
+#
+# AIMetrics: []
+#
+
+    Target:
+
+        Success
+
+    Result:
+
+        Work in progress ...
+
+# -----------------------------------------------------
+
+    Current config file, checked in to the source code.
+    `/Zarquan/Lithosia-Quadra/agents/git-identity.env`
+
+```
+AGENT_GIT_NAME="DeepSeek Harness"
+AGENT_GIT_EMAIL="zrq-github+dsh@metagrid.co.uk"
+```
+
+# -----------------------------------------------------
+
+    Top level Lithosia configuration for a project,
+    checked in as part of the source code.
+    `lithosia-project.yaml`
+
+```
+lithosia:
+  copyright:
+    owner: "University of Manchester (http://www.manchester.ac.uk/)"
+  license:
+    SPDX-ID: "GPL-3.0"
+```
+
+    Local configuration, excluded by .gitignore
+    overrides global settings with values specific
+    to this clone.
+    `lithosia-local.yaml`
+
+```
+lithosia:
+  agent:
+    title: "DeepSeek Harness"
+    email: "zrq-github+dsh@metagrid.co.uk"
+    token: "/run/secrets/dsh-github-token-zarquan"
+```
+
+    Or we could use a Docker env file
+    `${HOME}/lithosia-agent.env`
+
+```
+LITHOSIA_AGENT_NAME="DeepSeek Harness"
+LITHOSIA_AGENT_EMAIL="zrq-github+dsh@metagrid.co.uk"
+```
+
+# -----------------------------------------------------
+
+    Special case foa a project README.md file, the AIMetrics
+    should be in a code block at the end of the file.
+
+```
+AIMetrics: [
+  {
+  "interval": "2026-10-25T03:31:11/2026-10-25T04:01:29",
+  "name": "@deepseek-ai/dsh",
+  "version": "0.2.0-rc.2",
+  "model": "deepseek-v4.1-flash-1017",
+  "contribution": {
+    "value": 100,
+    "units": "%"
+    }
+  }
+]
+```
+
+# -----------------------------------------------------
+
+    Additional metrics available to DSH
+
+    ```
+    provider: api-greenpt-ai     # display name: GreenPT
+    baseURL: https://api.greenpt.ai/v1
+    api: openai-completions
+    model: deepseek-v4.1-flash-1017
+    apiKeyEnv: API_GREENPT_AI_API_KEY
+    ```
+
+    In which case we can expand the metadata to
+    include `model` and `agent` blocks.
+
+```
+AIMetrics: [
+  {
+  ....
+  "harness": {
+    "name": "@deepseek-ai/dsh",
+    "version": "0.2.0-rc.2",
+    }
+  "model": {
+    "name": "deepseek-v4.1-flash-1017",
+    "provider": {
+        "name": "api-greenpt-ai",
+        "display": "GreenPT",
+        "baseURL": "https://api.greenpt.ai/v1",
+        "api": "openai-completions"
+        }
+      }
+    ....
+  }
+]
+```
+
+
+# -----------------------------------------------------
+
+==START==
+Out of interest, you can get the agent name and version and the model name, can you discover anything else about the model and the inference endpoint hat is providing it ?
+==END==
+
+--START--
+Yes — and the short version is: **DSH is not talking to DeepSeek directly. It is talking to GreenPT, an EU-hosted OpenAI-compatible inference provider, which serves a very recent snapshot of DeepSeek V4.1 Flash.**
+
+## The model
+
+From the active profile:
+
+```yaml
+provider: api-greenpt-ai     # display name: GreenPT
+baseURL: https://api.greenpt.ai/v1
+api: openai-completions
+model: deepseek-v4.1-flash-1017
+apiKeyEnv: API_GREENPT_AI_API_KEY
+```
+
+That model is documented as the **17 October 2026 snapshot** of DeepSeek V4.1 Flash — only about eight days old at the time of this session.
+
+| Property | Finding |
+|---|---|
+| Owner | DeepSeek |
+| Serving provider | GreenPT |
+| Context window | **1M tokens** |
+| Input | Text and images |
+| Tool calling | Yes |
+| Structured output | JSON object via `response_format` |
+| Reasoning | Configurable: `none`, `minimal`, `low`, `medium`, `high` |
+| Prompt caching | Automatic prefix caching; cached input billed separately |
+| Hosting | EU by default |
+| Release | October 2026; `1017` snapshot |
+
+GreenPT’s customer pricing per million tokens:
+
+| | `deepseek-v4.1-flash-1017` | older `deepseek-v4.1-flash` |
+|---|---:|---:|
+| Input | €0.36 | €0.22 |
+| Cached input | €0.04 | €0.011 |
+| Output | €1.45 | €1.10 |
+
+So the newer snapshot is noticeably more expensive, especially for cache hits.
+
+Sources: [DeepSeek V4.1 Flash guide](https://docs.greenpt.ai/deepseek-v4-1-flash), [Model Cards](https://docs.greenpt.ai/model-cards).
+
+## The inference endpoint
+
+`https://api.greenpt.ai/v1` is the default **EU** endpoint. GreenPT also publishes:
+
+- `https://api.eu.greenpt.ai/v1` — explicit EU name
+- `https://api.us.greenpt.ai/v1` — US endpoint
+
+The API is OpenAI-compatible (`openai-completions`), with Bearer authentication.
+
+Some observations from probing it without credentials:
+
+- `GET /health` returns `200 {"status":"ok"}`.
+- `GET /v1/models` without a key returns `401 Unauthorized` with `WWW-Authenticate: Bearer realm="api.greenpt.ai"`.
+- It speaks **HTTP/2 over TLS 1.3**; the certificate is from Let’s Encrypt (`CN=api.greenpt.ai`, `YR2` intermediate).
+- At the time of checking, all three hostnames — default, EU and US — resolved to the same front-door IP: `195.154.72.170`.
+- RIPE RDAP attributes that address to **Scaleway, France**. GreenPT’s data-processor page confirms Scaleway in Paris for GPU hosting, with additional EU inference sub-processors in Finland: Inceptron, Tensorix and Melious. The US endpoint uses Neuralwatt.
+- Responses carry `x-correlation-id`, `cache-control: no-store`, and a fairly strict set of security headers.
+
+So region selection is by **hostname/SNI at the edge**, not by a different DNS address. The US hostname is a routing choice at the gateway; GreenPT says US requests are processed by Neuralwatt in the US.
+
+Sources: [Models API](https://docs.greenpt.ai/models), [Region Inference](https://docs.greenpt.ai/regions), [Data Processors](https://docs.greenpt.ai/privacy/processor).
+
+## A DSH-side wrinkle
+
+DSH’s underlying `pi-ai` model catalog does **not** contain the exact `deepseek-v4.1-flash-1017` id. It contains `deepseek-v4.1-flash` for several other providers, with a 1M context and 384k output cap, but not this GreenPT snapshot.
+
+Because `api-greenpt-ai` is a hand-declared route, the provider plugin falls back to:
+
+- **context window:** 262,144 tokens
+- **max output:** 32,768 tokens
+- **reasoning capability:** not declared, so DSH treats it as non-reasoning for its own controls
+
+That means the harness may be running this 1M-context model with a **256K effective window**, and it does not explicitly send a `reasoning_effort`. The model can still reason on its own default, but DSH is not steering it. This likely explains why long sessions compact earlier than the model’s real capacity would require.
+
+The fix would be to declare the real capacities in the profile entry, e.g. `contextWindow: 1000000`, a suitable `maxTokens`, and `reasoningEfforts`. I have not changed the profile — that is outside the project and would affect the live harness.
+
+Evidence: the active [cordis.patch.yml](/opt/dsh/profiles/web/cordis.patch.yml), and the provider plugin’s [README](/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-llm-pi-ai/README.md) and fallback constants in `lib/index.js`.
+
+## What I could not establish
+
+- Parameter count, architecture, tokenizer, knowledge cutoff, or exact maximum output for the `1017` snapshot — GreenPT’s public card does not state them.
+- Live account quota, rate limits, or per-request backend selection — those need an authenticated `/v1/me` or account API call.
+- Which specific EU sub-processor handled any individual request; GreenPT routes across several.
+
+I deliberately did **not** read `/opt/dsh/.credentials.yaml` or use `API_GREENPT_AI_API_KEY`. Everything above came from the public profile, public docs, unauthenticated HTTP probes, DNS/TLS metadata and RIPE RDAP.
+--END--
+
+
+
+
+

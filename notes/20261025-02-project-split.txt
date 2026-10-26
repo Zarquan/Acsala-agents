@@ -84,6 +84,104 @@ set of rules and tools for handling git identities and
 agent attribution.
 ==END==
 
+--START--
+....
+....
+--END--
 
+
+# -----------------------------------------------------
+
+==START==
+Can you check the contents of the `/Calycopis` and `/Zarquan` directories are what you expect to see.
+==END==
+
+--START--
+Mostly yes — the top-level contents and mounts match what I expect, and the Acsala repository is intact. Two things are worth flagging, both in `Lithosia-docker`'s documentation rather than in the directory tree.
+
+## What is mounted
+
+| Container path | Host source | State |
+|---|---|---|
+| `/Zarquan/Acsala-agents` | `/Zarquan/Projects/Zarquan/Acsala-agents` | ✅ clean at `6026fa6`, `origin/main` matches |
+| `/Zarquan/Lithosia-docker` | `/Zarquan/Projects/Zarquan/Lithosia-docker` | ✅ present, uncommitted note changes |
+| `/Zarquan/Jordanita` | `/Zarquan/Projects/Zarquan/Jordanita/github-zrq` | ✅ present |
+| `/Zarquan/Phyllonorycter-archive` | `/Zarquan/Projects/Zarquan/Phyllonorycter-archive` | ✅ present |
+| `/Zarquan/agents/scratch` | shared `Agents/scratch` | ✅ same mount as the Calycopis scratch |
+| `/Calycopis/Calycopis-broker` | `.../Calycopis-broker-uksrc-zrq` | ✅ present |
+| `/Calycopis/Calycopis-isobeon` | `.../Calycopis-Isobeon/github-zrq` | ✅ present |
+| `/Calycopis/Calycopis-openapi` | `.../Calycopis-openapi-uksrc-zrq` | ✅ present |
+| `/Calycopis/agents/scratch` | shared `Agents/scratch` | ✅ same inode as `/Zarquan/agents/scratch` |
+
+The Acsala project contains exactly the 21 committed files, with no untracked or modified files. Its local `README.md`, `AGENTS.md` and `.gitignore` were created with mode `0600`; I normalised them to `0644`. Git only records the executable bit, so the commit and the GitHub repository are unchanged.
+
+## Two discrepancies
+
+**1. The DSH home has moved out of `Lithosia-docker`, but the old docs still describe it inside the clone.**
+
+`/Zarquan/Lithosia-docker/dsh` no longer exists, and `.gitignore` has been changed to drop the `/dsh` entry. The live home is now mounted at `/opt/dsh` from `/Zarquan/Projects/Agents/dsh`, and the current launch note correctly uses `${DSH_HOME}`:
+
+- [notes/20261025-03-launch.txt](/Zarquan/Lithosia-docker/notes/20261025-03-launch.txt:106) — `--volume "${DSH_HOME:?}:/opt/dsh:rw,Z"`
+
+But these still describe the old layout:
+
+- [README.md](/Zarquan/Lithosia-docker/README.md:60) — source mounted at `/Zarquan/lithosia-quadra`
+- [README.md](/Zarquan/Lithosia-docker/README.md:64) — "The host copy lives in `dsh/`"
+- [AGENTS.md](/Zarquan/Lithosia-docker/AGENTS.md:182) — `dsh/` is the live harness home
+- [AGENTS.md](/Zarquan/Lithosia-docker/AGENTS.md:194) — "Never commit anything under `dsh/`"
+- [AGENTS.md](/Zarquan/Lithosia-docker/AGENTS.md:212) — projects mounted at `/Zarquan/lithosia-quadra`
+- [notes/20261009-02-launch.txt](/Zarquan/Lithosia-docker/notes/20261009-02-launch.txt:112) — still mounts `${LITHOSIA_CODE}/dsh`, although this note has otherwise been updated with the new project mounts
+
+Because `.gitignore` no longer ignores `dsh`, following that stale launch line would recreate a `dsh/` directory that is no longer ignored — a credential-leak risk if someone then runs `git add -A`.
+
+**2. The shared scratch mount is no longer at `Lithosia-docker/agents/scratch`.**
+
+`/Zarquan/Lithosia-docker/agents/scratch` is now an empty local directory; the shared scratch is only at `/Zarquan/agents/scratch` and `/Calycopis/agents/scratch`. That matches the current launch note, but anything that previously wrote to the project-local scratch path will now write into an empty, unshared directory.
+
+## Calycopis
+
+`Calycopis-broker` and `Calycopis-openapi` still carry their own `agents/` and `bin/` copies, and `Calycopis-isobeon` has neither. That is expected at this stage — no Calycopis project has been wired to `Acsala-agents` yet, and `Calycopis-openapi` still has its unrelated `isobeon` submodule.
+
+Would you like me to update the stale `Lithosia-docker` README/AGENTS/launch note to the new external `DSH_HOME` layout, or leave that for the next step?
+--END--
+
+
+==START==
+I have added a **DEPRECATED** comment to the top of 20261009-02-launch.txt.
+Please update Lithosia-docker README and AGENTS files to match the new configration.
+Please add empty directories at the following location and add a README file that says the directory has been deprecated and points to the new location.
+* `/Zarquan/Lithosia-docker/dsh`
+* `/Zarquan/Lithosia-docker/agents/scratch`
+We can remove these later once things stabilise.
+==END==
+
+--START--
+....
+....
+--END--
+
+
+==START==
+Can you remove the references to the mounted SSH_AGENT socket
+in the Lithosia-docker README and AGENTS files.
+The plan is to eventually deprecate/remove the ssh access and
+change the clones to use HTTP/S access.
+You don't need to add anything to that effect, just don't mention
+the mounted SSH_AGENT socket because it will probably
+be removed in the future lauches.
+==END==
+
+--START--
+....
+....
+--END--
+
+
+==START==
+We need to create a `build.sh` script in `/Zarquan/Lithosia-docker/bin` based on the `build.sh` script in `/Zarquan/Calycopis-broker/bin`.
+All it needs to do is set the environment variables and then calls the podman build command.
+Ideally it should be portable enough to execute it from both inside and outside the container.
+Once we have that, we can update the image tag in the Dockerfile, build a new image, and then update the image tag in the launch command in the notes.
+==END==
 
 
